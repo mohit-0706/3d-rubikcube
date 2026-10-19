@@ -1,0 +1,653 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Three by Three</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600..800&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500;600&display=swap">
+<style>
+/* Layout: a wide stage holding the cube on the left, a control panel on the right; stacks on phones. */
+:root {
+  --bg: #e8ebf0;
+  --panel: #f5f6f9;
+  --stage: #d9dee7;
+  --stage-glow: #eef1f6;
+  --fg: #14171f;
+  --muted: #5b6376;
+  --line: #c9cfda;
+  --accent: #3a3fd1;
+  --accent-ink: #ffffff;
+  --good: #0f7a45;
+  --f-display: "Bricolage Grotesque", "Avenir Next", "Segoe UI", sans-serif;
+  --f-body: "Instrument Sans", system-ui, "Segoe UI", sans-serif;
+  --f-mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #12141a;
+    --panel: #1b1e26;
+    --stage: #1a1d25;
+    --stage-glow: #2a2f3b;
+    --fg: #eceef4;
+    --muted: #9aa2b5;
+    --line: #2d323e;
+    --accent: #8d92ff;
+    --accent-ink: #0f1020;
+    --good: #4fd58f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #12141a;
+  --panel: #1b1e26;
+  --stage: #1a1d25;
+  --stage-glow: #2a2f3b;
+  --fg: #eceef4;
+  --muted: #9aa2b5;
+  --line: #2d323e;
+  --accent: #8d92ff;
+  --accent-ink: #0f1020;
+  --good: #4fd58f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--f-body);
+  padding-block: 20px 28px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.app {
+  max-width: 1120px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  align-items: start;
+}
+@media (max-width: 860px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+}
+
+.stage {
+  position: relative;
+  height: clamp(340px, 74vh, 700px);
+  border-radius: 14px;
+  border: 1px solid var(--line);
+  background: radial-gradient(ellipse at 50% 42%, var(--stage-glow) 0%, var(--stage) 70%);
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  min-width: 0;
+}
+.stage:active { cursor: grabbing; }
+@media (max-width: 860px) {
+  .stage { height: clamp(320px, 54vh, 520px); }
+}
+#gl { display: block; width: 100%; height: 100%; touch-action: none; }
+.hint {
+  position: absolute;
+  left: 14px; right: 14px; bottom: 10px;
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--muted);
+  pointer-events: none;
+}
+.fallback {
+  position: absolute; inset: 0;
+  display: grid; place-items: center;
+  padding: 24px; text-align: center;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  min-width: 0;
+}
+.panel > header { padding: 18px; }
+.panel > section { padding: 16px 18px; border-top: 1px solid var(--line); }
+h1 {
+  font: 700 28px/1.1 var(--f-display);
+  letter-spacing: -0.015em;
+  margin: 0 0 6px;
+  text-wrap: balance;
+}
+.sub { margin: 0; color: var(--muted); font-size: 14px; }
+
+.label {
+  display: block;
+  font-size: 11px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-weight: 600;
+}
+.time {
+  font: 600 44px/1 var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  margin-top: 8px;
+}
+.stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 16px; }
+.stat .v {
+  font: 600 20px/1.2 var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  margin-top: 2px;
+}
+.status { margin: 14px 0 0; min-height: 2.9em; font-size: 14px; }
+.status.win { color: var(--good); font-weight: 600; }
+
+.actions { display: grid; grid-template-columns: 1fr auto auto; gap: 8px; }
+.btn {
+  font: 600 14px/1 var(--f-body);
+  color: var(--fg);
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px 14px;
+  cursor: pointer;
+}
+.btn:hover:not(:disabled) { border-color: var(--muted); }
+.btn:active:not(:disabled) { transform: translateY(1px); }
+.btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.08); border-color: var(--accent); }
+
+.pad { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-top: 10px; }
+.pad .btn { font-family: var(--f-mono); font-size: 15px; padding: 11px 0; text-align: center; }
+
+.help { margin: 0; font-size: 13px; color: var(--muted); }
+.help + .help { margin-top: 8px; }
+kbd {
+  font: 500 12px var(--f-mono);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 1px 5px;
+  background: var(--bg);
+  color: var(--fg);
+}
+</style>
+
+<div class="app">
+  <div class="stage" id="stage">
+    <canvas id="gl" aria-label="3 by 3 cube. Drag a sticker to turn a layer, or drag the background to rotate the view."></canvas>
+    <p class="hint">Drag a sticker to turn that layer. Drag the empty space to rotate the whole cube.</p>
+    <p class="fallback" id="fallback" hidden>The 3D view could not start in this browser. Try another browser or enable hardware acceleration.</p>
+  </div>
+
+  <aside class="panel">
+    <header>
+      <h1>Three by Three</h1>
+      <p class="sub">A 3×3 cube to turn, scramble and time.</p>
+    </header>
+
+    <section aria-label="Timer and moves">
+      <span class="label">Time</span>
+      <div class="time" id="time">0:00.0</div>
+      <div class="stats">
+        <div class="stat"><span class="label">Moves</span><div class="v" id="moves">0</div></div>
+        <div class="stat"><span class="label">Best time</span><div class="v" id="best">&mdash;</div></div>
+      </div>
+      <p class="status" id="status" role="status" aria-live="polite">Solved cube. Press Scramble to start a timed solve.</p>
+    </section>
+
+    <section>
+      <div class="actions">
+        <button class="btn primary" id="scrambleBtn" type="button">Scramble</button>
+        <button class="btn" id="undoBtn" type="button" disabled>Undo</button>
+        <button class="btn" id="resetBtn" type="button">Reset</button>
+      </div>
+    </section>
+
+    <section>
+      <span class="label">Face turns</span>
+      <div class="pad" id="pad"></div>
+    </section>
+
+    <section>
+      <p class="help">Keys: <kbd>U</kbd> <kbd>D</kbd> <kbd>L</kbd> <kbd>R</kbd> <kbd>F</kbd> <kbd>B</kbd> turn a face clockwise. Hold <kbd>Shift</kbd> to turn it counter-clockwise.</p>
+      <p class="help">The timer starts on your first turn after a scramble and stops when every face is one colour.</p>
+    </section>
+  </aside>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+(function () {
+  'use strict';
+
+  var stage = document.getElementById('stage');
+  var canvas = document.getElementById('gl');
+  var fallback = document.getElementById('fallback');
+  var timeEl = document.getElementById('time');
+  var movesEl = document.getElementById('moves');
+  var bestEl = document.getElementById('best');
+  var statusEl = document.getElementById('status');
+  var scrambleBtn = document.getElementById('scrambleBtn');
+  var undoBtn = document.getElementById('undoBtn');
+  var resetBtn = document.getElementById('resetBtn');
+  var pad = document.getElementById('pad');
+
+  var reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var DUR_USER = reduceMotion ? 60 : 200;
+  var DUR_SCRAMBLE = reduceMotion ? 30 : 85;
+
+  /* ---------- Page state ---------- */
+  var moves = 0;
+  var history = [];
+  var armed = false;          // a scramble finished and the solve has not been completed
+  var scrambling = false;
+  var scrambleLeft = 0;
+  var timerStart = null;
+  var bestMs = null;
+  var STORE_KEY = 'three-by-three-best';
+
+  try {
+    var saved = parseFloat(localStorage.getItem(STORE_KEY));
+    if (isFinite(saved) && saved > 0) bestMs = saved;
+  } catch (e) { /* storage unavailable */ }
+
+  function fmt(ms) {
+    var m = Math.floor(ms / 60000);
+    var s = (ms / 1000) % 60;
+    var ss = s.toFixed(1);
+    if (s < 10) ss = '0' + ss;
+    return m + ':' + ss;
+  }
+  function setStatus(text, win) {
+    statusEl.textContent = text;
+    statusEl.classList.toggle('win', !!win);
+  }
+  function refreshUI() {
+    movesEl.textContent = String(moves);
+    bestEl.textContent = bestMs ? fmt(bestMs) : '—';
+    undoBtn.disabled = scrambling || history.length === 0;
+    scrambleBtn.disabled = scrambling;
+  }
+
+  /* ---------- Build the pad buttons ---------- */
+  var FACE = {
+    U: { axis: 'y', layer: 1, s: 1, name: 'Up' },
+    D: { axis: 'y', layer: -1, s: -1, name: 'Down' },
+    R: { axis: 'x', layer: 1, s: 1, name: 'Right' },
+    L: { axis: 'x', layer: -1, s: -1, name: 'Left' },
+    F: { axis: 'z', layer: 1, s: 1, name: 'Front' },
+    B: { axis: 'z', layer: -1, s: -1, name: 'Back' }
+  };
+  ['U', 'D', 'L', 'R', 'F', 'B'].forEach(function (k) {
+    [false, true].forEach(function (prime) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'btn';
+      b.textContent = prime ? k + '′' : k;
+      b.title = FACE[k].name + ' face, ' + (prime ? 'counter-clockwise' : 'clockwise');
+      b.setAttribute('aria-label', b.title);
+      b.addEventListener('click', function () { faceMove(k, prime); });
+      pad.appendChild(b);
+    });
+  });
+
+  if (!window.THREE) {
+    fallback.hidden = false;
+    return;
+  }
+  var THREE = window.THREE;
+
+  /* ---------- Renderer, scene, camera ---------- */
+  var renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas: canvas, antialias: true, alpha: true });
+  } catch (err) {
+    fallback.hidden = false;
+    return;
+  }
+  renderer.setClearColor(0x000000, 0);
+  var scene = new THREE.Scene();
+  var camera = new THREE.PerspectiveCamera(35, 1, 0.1, 100);
+  scene.add(new THREE.AmbientLight(0xffffff, 0.82));
+  var sun = new THREE.DirectionalLight(0xffffff, 0.55);
+  sun.position.set(-4, 7, 6);
+  scene.add(sun);
+
+  function resize() {
+    var w = Math.max(1, stage.clientWidth);
+    var h = Math.max(1, stage.clientHeight);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    var dist = 10.4 / Math.min(1, camera.aspect);
+    camera.position.set(0, 0, dist);
+    camera.lookAt(0, 0, 0);
+    camera.updateProjectionMatrix();
+  }
+  if (window.ResizeObserver) {
+    new ResizeObserver(resize).observe(stage);
+  }
+  window.addEventListener('resize', resize);
+
+  /* ---------- Cube model ---------- */
+  var COLORS = { px: 0xd62b1f, nx: 0xff7f11, py: 0xf4f4ef, ny: 0xf7c600, pz: 0x0f9d58, nz: 0x1558d6 };
+  var FACE_DEFS = [
+    { key: 'px', n: [1, 0, 0] }, { key: 'nx', n: [-1, 0, 0] },
+    { key: 'py', n: [0, 1, 0] }, { key: 'ny', n: [0, -1, 0] },
+    { key: 'pz', n: [0, 0, 1] }, { key: 'nz', n: [0, 0, -1] }
+  ];
+  var stickerMats = {};
+  Object.keys(COLORS).forEach(function (k) {
+    stickerMats[k] = new THREE.MeshLambertMaterial({ color: COLORS[k] });
+  });
+  var bodyMat = new THREE.MeshLambertMaterial({ color: 0x111216 });
+  var bodyGeo = new THREE.BoxGeometry(0.98, 0.98, 0.98);
+
+  function roundedGeo(size, r) {
+    var h = size / 2, s = new THREE.Shape();
+    s.moveTo(-h + r, -h);
+    s.lineTo(h - r, -h);
+    s.quadraticCurveTo(h, -h, h, -h + r);
+    s.lineTo(h, h - r);
+    s.quadraticCurveTo(h, h, h - r, h);
+    s.lineTo(-h + r, h);
+    s.quadraticCurveTo(-h, h, -h, h - r);
+    s.lineTo(-h, -h + r);
+    s.quadraticCurveTo(-h, -h, -h + r, -h);
+    return new THREE.ShapeGeometry(s, 6);
+  }
+  var stickerGeo = roundedGeo(0.84, 0.13);
+
+  var cube = new THREE.Group();
+  cube.quaternion.setFromEuler(new THREE.Euler(0.5, -0.7, 0));
+  scene.add(cube);
+  var core = new THREE.Mesh(new THREE.BoxGeometry(2.94, 2.94, 2.94), bodyMat);
+  cube.add(core);
+  var cubies = [];
+  var Z = new THREE.Vector3(0, 0, 1);
+
+  function build() {
+    cube.children.slice().forEach(function (ch) { if (ch !== core) cube.remove(ch); });
+    cubies = [];
+    for (var x = -1; x <= 1; x++) {
+      for (var y = -1; y <= 1; y++) {
+        for (var z = -1; z <= 1; z++) {
+          var m = new THREE.Mesh(bodyGeo, bodyMat);
+          m.position.set(x, y, z);
+          m.userData.stickers = [];
+          FACE_DEFS.forEach(function (f) {
+            if (f.n[0] * x + f.n[1] * y + f.n[2] * z !== 1) return;
+            var nv = new THREE.Vector3(f.n[0], f.n[1], f.n[2]);
+            var st = new THREE.Mesh(stickerGeo, stickerMats[f.key]);
+            st.position.copy(nv).multiplyScalar(0.4905);
+            st.quaternion.setFromUnitVectors(Z, nv);
+            st.userData.color = f.key;
+            st.userData.n = nv.clone();
+            m.add(st);
+            m.userData.stickers.push(st);
+          });
+          cube.add(m);
+          cubies.push(m);
+        }
+      }
+    }
+  }
+  build();
+
+  function isSolved() {
+    var seen = {};
+    for (var i = 0; i < cubies.length; i++) {
+      var c = cubies[i];
+      for (var j = 0; j < c.userData.stickers.length; j++) {
+        var s = c.userData.stickers[j];
+        var n = s.userData.n.clone().applyQuaternion(c.quaternion);
+        var key = Math.round(n.x) + ',' + Math.round(n.y) + ',' + Math.round(n.z);
+        if (seen[key] === undefined) seen[key] = s.userData.color;
+        else if (seen[key] !== s.userData.color) return false;
+      }
+    }
+    return true;
+  }
+
+  /* ---------- Move queue and animation ---------- */
+  var AX = { x: new THREE.Vector3(1, 0, 0), y: new THREE.Vector3(0, 1, 0), z: new THREE.Vector3(0, 0, 1) };
+  var queue = [];
+  var current = null;
+
+  function ease(t) { return t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2; }
+
+  function startNext() {
+    var mv = queue.shift();
+    var pivot = new THREE.Group();
+    cube.add(pivot);
+    cubies.forEach(function (c) {
+      if (Math.round(c.position[mv.axis]) === mv.layer) pivot.attach(c);
+    });
+    current = { mv: mv, pivot: pivot, t0: performance.now(), to: mv.turns * Math.PI / 2 };
+  }
+
+  function snap(c) {
+    c.position.set(Math.round(c.position.x), Math.round(c.position.y), Math.round(c.position.z));
+    c.scale.set(1, 1, 1);
+    var m = new THREE.Matrix4().makeRotationFromQuaternion(c.quaternion);
+    for (var i = 0; i < 16; i++) m.elements[i] = Math.round(m.elements[i]);
+    c.quaternion.setFromRotationMatrix(m);
+  }
+
+  function finish() {
+    var cur = current;
+    cur.pivot.rotation[cur.mv.axis] = cur.to;
+    cur.pivot.updateMatrixWorld(true);
+    cur.pivot.children.slice().forEach(function (c) { cube.attach(c); snap(c); });
+    cube.remove(cur.pivot);
+    current = null;
+    onMoveDone(cur.mv);
+  }
+
+  function onMoveDone(mv) {
+    if (mv.scr) {
+      scrambleLeft--;
+      if (scrambleLeft <= 0) {
+        scrambling = false;
+        armed = true;
+        history = [];
+        moves = 0;
+        setStatus('Scrambled. The timer starts on your first turn.');
+        refreshUI();
+      }
+    }
+    if (mv.user && !current && queue.length === 0) checkWin();
+  }
+
+  function checkWin() {
+    if (!armed || !isSolved()) return;
+    armed = false;
+    var t = timerStart ? performance.now() - timerStart : 0;
+    timerStart = null;
+    timeEl.textContent = fmt(t);
+    var msg = 'Solved in ' + fmt(t) + ' with ' + moves + ' moves.';
+    if (!bestMs || t < bestMs) {
+      bestMs = t;
+      msg += ' New best time.';
+      try { localStorage.setItem(STORE_KEY, String(t)); } catch (e) { /* ignore */ }
+    }
+    setStatus(msg, true);
+    refreshUI();
+  }
+
+  function userMove(axis, layer, turns, isUndo) {
+    if (scrambling) return;
+    if (armed && !timerStart) {
+      timerStart = performance.now();
+      setStatus('Solving…');
+    }
+    if (isUndo) {
+      moves = Math.max(0, moves - 1);
+    } else {
+      moves++;
+      history.push({ axis: axis, layer: layer, turns: turns });
+    }
+    queue.push({ axis: axis, layer: layer, turns: turns, dur: DUR_USER, user: true });
+    refreshUI();
+  }
+
+  function faceMove(name, prime) {
+    var f = FACE[name];
+    userMove(f.axis, f.layer, (prime ? 1 : -1) * f.s, false);
+  }
+
+  function undo() {
+    if (scrambling || history.length === 0) return;
+    var m = history.pop();
+    userMove(m.axis, m.layer, -m.turns, true);
+  }
+
+  function scramble() {
+    if (scrambling) return;
+    var axes = ['x', 'y', 'z'];
+    var count = 22, lastAxis = '';
+    moves = 0; history = []; armed = false; timerStart = null;
+    timeEl.textContent = fmt(0);
+    scrambling = true;
+    scrambleLeft = count;
+    setStatus('Scrambling…');
+    for (var i = 0; i < count; i++) {
+      var a;
+      do { a = axes[Math.floor(Math.random() * 3)]; } while (a === lastAxis);
+      lastAxis = a;
+      var layer = Math.random() < 0.5 ? 1 : -1;
+      var turns = Math.random() < 0.5 ? 1 : -1;
+      queue.push({ axis: a, layer: layer, turns: turns, dur: DUR_SCRAMBLE, scr: true });
+    }
+    refreshUI();
+  }
+
+  function resetCube() {
+    queue.length = 0;
+    current = null;
+    scrambling = false;
+    scrambleLeft = 0;
+    armed = false;
+    timerStart = null;
+    moves = 0;
+    history = [];
+    build();
+    timeEl.textContent = fmt(0);
+    setStatus('Solved cube. Press Scramble to start a timed solve.');
+    refreshUI();
+  }
+
+  scrambleBtn.addEventListener('click', scramble);
+  undoBtn.addEventListener('click', undo);
+  resetBtn.addEventListener('click', resetCube);
+
+  window.addEventListener('keydown', function (e) {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    var t = e.target;
+    if (t && /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName)) return;
+    var k = (e.key || '').toUpperCase();
+    if (FACE[k]) {
+      e.preventDefault();
+      faceMove(k, e.shiftKey);
+    }
+  });
+
+  /* ---------- Pointer: turn a layer or rotate the view ---------- */
+  var ray = new THREE.Raycaster();
+  var ndc = new THREE.Vector2();
+  var drag = null;
+  var QY = new THREE.Vector3(0, 1, 0);
+  var QX = new THREE.Vector3(1, 0, 0);
+
+  function pick(ev) {
+    var r = canvas.getBoundingClientRect();
+    ndc.set(((ev.clientX - r.left) / r.width) * 2 - 1, -((ev.clientY - r.top) / r.height) * 2 + 1);
+    ray.setFromCamera(ndc, camera);
+    var hits = ray.intersectObjects(cubies, false);
+    return hits.length ? hits[0] : null;
+  }
+
+  function toScreen(v) {
+    var r = canvas.getBoundingClientRect();
+    var p = v.clone().applyMatrix4(cube.matrixWorld).project(camera);
+    return { x: (p.x * 0.5 + 0.5) * r.width, y: (-p.y * 0.5 + 0.5) * r.height };
+  }
+
+  function turnFromDrag(d, dx, dy) {
+    var best = null;
+    ['x', 'y', 'z'].forEach(function (a) {
+      if (Math.abs(d.n[a]) > 0.5) return;
+      var t = new THREE.Vector3().crossVectors(AX[a], d.p).normalize();
+      var s0 = toScreen(d.p);
+      var s1 = toScreen(d.p.clone().addScaledVector(t, 0.5));
+      var sx = s1.x - s0.x, sy = s1.y - s0.y;
+      var len = Math.hypot(sx, sy) || 1;
+      var score = (dx * sx + dy * sy) / len;
+      if (!best || Math.abs(score) > Math.abs(best.score)) best = { axis: a, score: score };
+    });
+    if (!best) return null;
+    return {
+      axis: best.axis,
+      layer: Math.round(d.cubie.position[best.axis]),
+      turns: best.score >= 0 ? 1 : -1
+    };
+  }
+
+  canvas.addEventListener('pointerdown', function (ev) {
+    try { canvas.setPointerCapture(ev.pointerId); } catch (e) { /* ignore */ }
+    drag = { id: ev.pointerId, x: ev.clientX, y: ev.clientY, lx: ev.clientX, ly: ev.clientY, mode: 'view', done: false };
+    var hit = pick(ev);
+    if (hit && !scrambling) {
+      var nw = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+      var nl = nw.applyQuaternion(cube.quaternion.clone().invert());
+      drag.n = { x: Math.round(nl.x), y: Math.round(nl.y), z: Math.round(nl.z) };
+      drag.p = cube.worldToLocal(hit.point.clone());
+      drag.cubie = hit.object;
+      drag.mode = 'layer';
+    }
+  });
+
+  canvas.addEventListener('pointermove', function (ev) {
+    if (!drag || ev.pointerId !== drag.id) return;
+    if (drag.mode === 'view') {
+      var qy = new THREE.Quaternion().setFromAxisAngle(QY, (ev.clientX - drag.lx) * 0.009);
+      var qx = new THREE.Quaternion().setFromAxisAngle(QX, (ev.clientY - drag.ly) * 0.009);
+      cube.quaternion.premultiply(qy).premultiply(qx);
+      drag.lx = ev.clientX;
+      drag.ly = ev.clientY;
+      return;
+    }
+    if (drag.done || current || queue.length) return;
+    var dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+    if (Math.hypot(dx, dy) < 10) return;
+    var mv = turnFromDrag(drag, dx, dy);
+    drag.done = true;
+    if (mv) userMove(mv.axis, mv.layer, mv.turns, false);
+  });
+
+  function endDrag(ev) {
+    if (drag && ev.pointerId === drag.id) drag = null;
+  }
+  canvas.addEventListener('pointerup', endDrag);
+  canvas.addEventListener('pointercancel', endDrag);
+
+  /* ---------- Frame loop ---------- */
+  function frame(now) {
+    if (current) {
+      var k = Math.min(1, (now - current.t0) / current.mv.dur);
+      current.pivot.rotation[current.mv.axis] = current.to * ease(k);
+      if (k >= 1) finish();
+    } else if (queue.length) {
+      startNext();
+    }
+    if (timerStart) timeEl.textContent = fmt(now - timerStart);
+    renderer.render(scene, camera);
+    requestAnimationFrame(frame);
+  }
+
+  resize();
+  refreshUI();
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
